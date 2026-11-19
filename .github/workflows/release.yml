@@ -88,7 +88,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
-        run: go tool mygo build -platform "${{ matrix.platform }}" -upload
+        # The jobs of the three systems each upload SHA256SUMS, and one
+        # finishing at the same moment as another is refused: try again.
+        run: |
+          for i in 1 2 3; do
+            go tool mygo build -platform "${{ matrix.platform }}" -upload && exit 0
+            sleep $((20 * i))
+          done
+          exit 1
 
   android:
     needs: draft-release
