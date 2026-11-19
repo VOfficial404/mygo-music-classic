@@ -35,7 +35,9 @@ func TestEapiVector(t *testing.T) {
 	}
 }
 
-// TestSongConversion checks old and new catalog shapes, exact IDs, artwork and privileges.
+// TestSongConversion checks old and new catalog shapes, exact IDs, artwork and
+// privileges, and that a track names NetEase as its source: without it, the
+// player found no source to play it through, and said it was turned off.
 func TestSongConversion(t *testing.T) {
 	const fixture = `{
 		"songs":[
@@ -52,13 +54,13 @@ func TestSongConversion(t *testing.T) {
 	}
 	tracks := convertTracks(reply.Songs, reply.Privileges)
 	first, second := tracks[0], tracks[1]
-	if first.ID != "9007199254740993" || first.URL != site+"/song?id="+first.ID || first.Duration != 256120 || !first.Unavailable || first.ArtistNames() != "MyGO!!!!!" || first.Source != "" {
+	if first.ID != "9007199254740993" || first.URL != site+"/song?id="+first.ID || first.Duration != 256120 || !first.Unavailable || first.ArtistNames() != "MyGO!!!!!" || first.Source != ID {
 		t.Fatalf("first track: %+v", first)
 	}
 	if want := "https://p1.music.126.net/cover.png?param={size}y{size}"; first.Album.ImageURL != want {
 		t.Errorf("image = %q, want %q", first.Album.ImageURL, want)
 	}
-	if second.Duration != 42 || second.Album.ID != "10" || second.ArtistNames() != "乐队" || second.Unavailable {
+	if second.Duration != 42 || second.Album.ID != "10" || second.ArtistNames() != "乐队" || second.Unavailable || second.Source != ID {
 		t.Fatalf("second track: %+v", second)
 	}
 }

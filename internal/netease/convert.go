@@ -154,8 +154,10 @@ func (song remoteSong) track() music.Track {
 	} else if song.OldAlbum != nil {
 		album = song.OldAlbum.album()
 	}
+	// Its source, which it plays through: the player asks the app for the
+	// source of that ID, and a track without it has none.
 	tr := music.Track{
-		ID: id, Name: firstText(song.Name, "未知歌曲"), Album: album,
+		ID: id, Source: ID, Name: firstText(song.Name, "未知歌曲"), Album: album,
 		Artists: convertSlice(artists, remoteArtist.artist), Duration: song.Duration,
 		Unavailable: song.Status < 0 || (song.Privilege != nil && song.Privilege.Status < 0),
 	}

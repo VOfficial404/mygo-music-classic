@@ -274,8 +274,13 @@ func (a *app) setSourceEnabled(lib *library, on bool) {
 	a.changed()
 }
 
-// sourceByID finds the source a track says it's of, for the player.
+// sourceByID finds the source a track says it's of, for the player. A track
+// that says none is NetEase's: versions before 1.0.3 kept its songs without
+// their source, in the session and the lists they saved.
 func (a *app) sourceByID(id string) music.Source {
+	if id == "" {
+		id = netease.ID
+	}
 	if lib := a.libOf(id); lib != nil {
 		return lib.src
 	}
