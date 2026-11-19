@@ -64,6 +64,13 @@ func TestPhoneFrames(t *testing.T) {
 	settled(tt)
 	saveFrame(t, dir, "phone-settings.png", tt.Image())
 
+	a.library.stations = []music.Station{{ID: "fm", Name: "Personal FM"}, {ID: "heart", Name: "Heartbeat"}}
+	a.library.stationsOnce = true
+	a.pl.AttachRadio(radioName("fake", &a.library.stations[0]), func(func([]music.Track)) {})
+	a.open(route{page: pageStations})
+	settled(tt)
+	saveFrame(t, dir, "phone-fm.png", tt.Image())
+
 	a.nowPlaying, a.npPane = true, paneLyrics
 	tt.SetDark(true)
 	tt.Advance(2 * time.Second)

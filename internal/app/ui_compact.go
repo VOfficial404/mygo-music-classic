@@ -23,6 +23,66 @@ func isCompact(c *ui.Context) bool {
 // hardware buttons for the volume and no pointer to hover.
 var onPhone = runtime.GOOS == "android" || runtime.GOOS == "ios"
 
+// uiScales are the sizes the interface can show at, in percent: 0 follows
+// the device.
+var uiScales = []struct {
+	percent int
+	label   string
+}{
+	{0, N("Automatic")},
+	{100, "100%"},
+	{115, "115%"},
+	{130, "130%"},
+}
+
+// phoneZoom is how much larger a phone shows the interface: its pages were
+// made for a desktop's, read at arm's length, not in the hand.
+const phoneZoom = 1.15
+
+// zoom is how much larger the windows' content shows, as the settings say.
+func (a *app) zoom() float32 {
+	if a.settings.UIScale > 0 {
+		return float32(a.settings.UIScale) / 100
+	}
+	if onPhone {
+		return phoneZoom
+	}
+	return 1
+}
+
+// phoneEdges paints the strips of a phone's screen its bars cover, which
+// the window's content stays clear of, in the colors of what meets them:
+// the page and the tabs, or Now Playing's backdrop as it comes over them.
+// Left to the window's background, they showed as white bands over and
+// under the lyrics.
+func (a *app) phoneEdges(c *ui.Context) {
+	top, _, bottom, _ := c.SafeArea()
+	if top <= 0 && bottom <= 0 {
+		return
+	}
+	p := a.pal
+	head, foot := p.bg, p.bg
+	if isCompact(c) {
+		foot = p.sidebar
+	}
+	if k := clamp01(a.npT); k > 0 {
+		tint := ui.RGB(120, 120, 130)
+		if a.npArt != nil && !a.npArt.failed {
+			tint = a.npArt.tint
+		}
+		npTop, npFoot := backdropColors(tint)
+		head, foot = head.Mix(npTop, k), foot.Mix(npFoot, k)
+	}
+	ui.Overlay(c, func() {
+		if top > 0 {
+			ui.Box(c.Key("edge-top")).Absolute().Top(0).Left(0).Right(0).Height(top).Background(head).PassThrough()
+		}
+		if bottom > 0 {
+			ui.Box(c.Key("edge-bottom")).Absolute().Bottom(0).Left(0).Right(0).Height(bottom).Background(foot).PassThrough()
+		}
+	})
+}
+
 // compactBarHeight is the height of the player floating over the tabs in the
 // compact layout, compactBarGap the room around it, and tabBarHeight the
 // height of the tabs.

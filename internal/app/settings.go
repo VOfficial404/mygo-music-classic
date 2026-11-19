@@ -78,6 +78,9 @@ type settings struct {
 	CacheMB int `json:"cacheMB"`
 	// SearchHistory keeps submitted keywords, most recent first.
 	SearchHistory []string `json:"searchHistory,omitempty"`
+	// UIScale zooms the windows' content, in percent: 0 to follow the device,
+	// larger on a phone.
+	UIScale int `json:"uiScale,omitempty"`
 
 	path string // where they were loaded from, and are saved to
 }

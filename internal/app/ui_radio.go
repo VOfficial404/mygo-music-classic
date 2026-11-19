@@ -151,10 +151,14 @@ func (a *app) stationsPage(c *ui.Context) {
 		few := len(lib.stations) > 1 && len(lib.stations) <= maxSwitchedStations
 		ui.Row(c).AlignItems(ui.End).Children(func() {
 			ui.Box(c).Grow(1).Shrink(1).MinWidth(0).Children(func() { a.heading(c, a.builtinTitle("stations"), T("Music without end")) })
-			if few {
+			if few && !isCompact(c) {
 				a.stationSwitch(c, lib)
 			}
 		})
+		// A phone has no room beside the heading: under it, scrolling across.
+		if few && isCompact(c) {
+			ui.ScrollHorizontal(c.Key("stations")).Children(func() { a.stationSwitch(c, lib) })
+		}
 		if !lib.stationsOnce {
 			a.playlistCardsSkeleton(c, a.pageShimmer(c), a.columns(c, 156), 156, false)
 			return
@@ -223,8 +227,15 @@ func (a *app) radioCard(c *ui.Context, lib *library) {
 	if tr != nil {
 		art = a.art.get(sized(tr.Album.ImageURL, 600), true)
 	}
-	card := ui.Box(c.Key("radio-card")).Height(320).Radius(24).Background(ui.Hex("#232328")).TextColor(white).
+	// On a phone the covers go over what plays, as tall as they need.
+	compact := isCompact(c)
+	card := ui.Box(c.Key("radio-card")).Radius(24).Background(ui.Hex("#232328")).TextColor(white).
 		Shadow(0, 18, 44, -16, a.pal.cardShade)
+	titleSize := float32(24)
+	if !compact {
+		card.Height(320)
+		titleSize = 30
+	}
 	in := artIn(card, backdrop(art))
 	card.Children(func() {
 		if in < 1 {
@@ -237,8 +248,16 @@ func (a *app) radioCard(c *ui.Context, lib *library) {
 				{Color: ui.RGBA(0, 0, 0, 0.35), At: 0},
 				{Color: ui.RGBA(0, 0, 0, 0.1), At: 1},
 			}})
-		ui.Row(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Padding(36, 40).Gap(40).AlignItems(ui.Center).Children(func() {
-			a.radioCovers(c, tr)
+		inner := ui.Row(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Padding(36, 40).Gap(40).AlignItems(ui.Center)
+		coverSize := float32(232)
+		if compact {
+			// In the flow, as tall as it needs: over the layers behind it,
+			// which are positioned, and would paint over it.
+			inner = ui.Column(c).Padding(28, 24, 24, 24).Gap(22).AlignItems(ui.Stretch).ZIndex(1)
+			coverSize = max(min(contentWidth(c)-2*pagePadding(c)-48-36, 220), 120)
+		}
+		inner.Children(func() {
+			ui.Row(c).Shrink(0).Justify(ui.Center).Children(func() { a.radioCovers(c, tr, coverSize) })
 			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
 				first := &lib.stations[min(a.stationAt, len(lib.stations)-1)]
 				label := first.Name
@@ -250,7 +269,7 @@ func (a *app) radioCard(c *ui.Context, lib *library) {
 					ui.Text(c, label).FontSize(12).FontWeight(600).TextColor(white.Alpha(0.75))
 				})
 				if tr == nil {
-					ui.Text(c, T("Hear something new")).FontSize(30).FontWeight(800).LetterSpacing(-0.6)
+					ui.Text(c, T("Hear something new")).FontSize(titleSize).FontWeight(800).LetterSpacing(-0.6)
 					if first.Description != "" {
 						ui.Text(c, first.Description).FontSize(13.5).TextColor(white.Alpha(0.75)).MaxLines(2)
 					}
@@ -265,7 +284,7 @@ func (a *app) radioCard(c *ui.Context, lib *library) {
 					})
 					return
 				}
-				ui.Text(c, tr.Name).FontSize(30).FontWeight(800).LetterSpacing(-0.6).MaxLines(2).LineHeight(1.2)
+				ui.Text(c, tr.Name).FontSize(titleSize).FontWeight(800).LetterSpacing(-0.6).MaxLines(2).LineHeight(1.2)
 				switch {
 				case pl.Loading():
 					ui.Text(c, T("Buffering…")).FontSize(14).TextColor(white.Alpha(0.7)).SingleLine()
@@ -299,8 +318,7 @@ func (a *app) radioCard(c *ui.Context, lib *library) {
 
 // radioCovers stacks the cover playing over the next one's, which peeks out
 // behind it, tilted.
-func (a *app) radioCovers(c *ui.Context, tr *music.Track) {
-	const size = 232
+func (a *app) radioCovers(c *ui.Context, tr *music.Track, size float32) {
 	ui.Box(c).Size(size+36, size).Shrink(0).Children(func() {
 		var next *music.Track
 		if tr != nil {

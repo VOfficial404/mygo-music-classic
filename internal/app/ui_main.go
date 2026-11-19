@@ -19,6 +19,7 @@ func (a *app) view(c *ui.Context) {
 	useAccent(&t, p)
 	t.Selection = p.accent.Alpha(0.3)
 	c.SetTheme(&t)
+	c.SetZoom(a.zoom())
 
 	a.shortcuts(c)
 
@@ -80,6 +81,7 @@ func (a *app) view(c *ui.Context) {
 		})
 		a.nowPlayingLayer(c, npOpen, npSettled)
 	})
+	a.phoneEdges(c)
 	a.signInDialog(c, a.pal, false)
 	a.playlistNameDialog(c)
 	a.deletePlaylistDialog(c)

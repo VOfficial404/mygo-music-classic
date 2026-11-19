@@ -33,10 +33,13 @@ func (a *app) npState(c *ui.Context) (open, settled bool) {
 		// theme over the pages (Windows).
 		if a.win != nil {
 			buttons := mygo.ThemeSystem
+			bars := mygo.BarStyleAuto
 			if open {
-				buttons = mygo.ThemeDark
+				buttons, bars = mygo.ThemeDark, mygo.BarStyleLight
 			}
 			a.win.SetWindowButtonsTheme(buttons)
+			// And the icons of a phone's bars, over the backdrop there.
+			mygo.SystemBars.SetStyle(bars)
 		}
 	}
 	return open, a.npAtRest(open)

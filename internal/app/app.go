@@ -295,9 +295,13 @@ func Run() error {
 	if !mygo.App.RequestSingleInstanceLock() {
 		return nil
 	}
-	// A heap that grows by half, not by all of itself, before it's collected:
-	// a music player idles most of the time, and its memory is what's seen.
-	debug.SetGCPercent(50)
+	// On a desktop, a heap that grows by half, not by all of itself, before
+	// it's collected: a music player idles most of the time, and its memory
+	// is what's seen. A phone keeps Go's pace: collecting twice as often
+	// there costs frames, which are seen more.
+	if !onPhone {
+		debug.SetGCPercent(50)
+	}
 	keepLog()
 	a := &app{
 		signInOver:  new(atomic.Pointer[mygo.Window]),

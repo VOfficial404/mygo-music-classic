@@ -149,6 +149,7 @@ func (a *app) settingsView(c *ui.Context) {
 	p := paletteFor(&t)
 	useAccent(&t, p)
 	c.SetTheme(&t)
+	c.SetZoom(a.zoom())
 	c.Root().Background(p.bg)
 	c.OnShortcut(ui.Cmd, ui.KeyW, func() { a.settingsWin.Close() })
 	c.OnShortcut(ui.Cmd, ui.KeyF, func() { a.settingsSearchBox.Focus(c) })
@@ -364,6 +365,20 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 					}
 				}
 				a.setLanguage(code)
+			}
+		})
+		row(T("Interface Size"), T("How large text and controls show"), func() {
+			labels := make([]string, len(uiScales))
+			at := 0
+			for i, sc := range uiScales {
+				labels[i] = sc.label
+				if sc.percent == s.UIScale {
+					at = i
+				}
+			}
+			if i, ok := choice(c, "ui-scale", T("Interface Size"), labels, at); ok {
+				s.UIScale = uiScales[i].percent
+				a.changed()
 			}
 		})
 		row(T("Appearance"), "", func() {
