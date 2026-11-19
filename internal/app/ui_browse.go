@@ -106,7 +106,7 @@ func (a *app) browseHeader(c *ui.Context, page *music.Browse) {
 	// As far below as an artist's sections are, as its first title keeps
 	// none of its own.
 	heroRow(c).Margin(0, 0, 34, 0).Children(func() {
-		ui.Box(c).Size(artistPhotoSize, artistPhotoSize).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
+		heroBox(c).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
 			a.coverFill(c, page.ImageURL, 600, artistPhotoSize/2)
 		})
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {

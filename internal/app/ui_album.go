@@ -65,7 +65,7 @@ func (a *app) albumHeader(c *ui.Context, d *albumData) {
 	al := &d.album.Album
 	tracks := d.album.Tracks
 	heroRow(c).Padding(0, 0, 26, 0).Children(func() {
-		ui.Box(c).Size(212, 212).Radius(14).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
+		heroBox(c).Radius(14).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
 			a.coverFill(c, al.ImageURL, 600, 14)
 		})
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {

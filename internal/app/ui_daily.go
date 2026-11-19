@@ -124,7 +124,7 @@ func (a *app) dayCover(c *ui.Context, songs []music.Track, now time.Time) {
 	if len(songs) > 0 {
 		art = a.art.get(sized(songs[0].Album.ImageURL, 600), true)
 	}
-	box := ui.Box(c).Size(212, 212).Radius(14).Shadow(0, 18, 40, -10, a.pal.cardShade)
+	box := heroBox(c).Radius(14).Shadow(0, 18, 40, -10, a.pal.cardShade)
 	deep, rich, _ := dailyColors(art)
 	fade := ui.Animation{Duration: 600 * time.Millisecond}
 	deep, rich = box.AnimateColor("deep", deep, fade), box.AnimateColor("rich", rich, fade)

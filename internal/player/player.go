@@ -73,6 +73,8 @@ type Player struct {
 	err     string
 	gen     int // counts loads, to drop the results of stale ones
 
+	stall stallState // whether what's heard moves as it plays: see stall.go
+
 	lyrics       []lyrics.Line
 	lyricsLoaded bool
 
@@ -141,6 +143,7 @@ func (p *Player) sync() {
 		state = mygo.PlaybackPlaying
 	}
 	mygo.NowPlaying.SetPlayback(state, p.Position())
+	p.watchStall()
 }
 
 // announce shows the system the track, and its cover once loaded.
@@ -674,6 +677,7 @@ func (p *Player) loadSkipping(at, skipped, dir int, play bool, from time.Duratio
 	p.track = &t
 	p.loading, p.playing, p.err = true, play, ""
 	p.awaiting = false
+	p.stall.said = false
 	p.lyrics, p.lyricsLoaded = nil, false
 	p.pending = from
 	p.recorded = ""

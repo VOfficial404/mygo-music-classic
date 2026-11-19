@@ -660,7 +660,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *music.Track, h float32) {
 	defer a.quietCard(c, dim, h*0.18)
 	size := float32(30)
 	if a.npCompact {
-		size = 24
+		size = 22
 	}
 	a.timedLines(c, scroll, lines, pos, cur, lag, linesStyle{size: size, weight: 800, lineHeight: 1.25, quiet: quiet}, nil)
 }

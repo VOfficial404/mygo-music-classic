@@ -213,6 +213,15 @@ func heroRow(c *ui.Context) ui.Element {
 	return ui.Row(c).Gap(28).AlignItems(ui.End)
 }
 
+// heroBox is the picture heading a page: beside its title on a desktop, and
+// in the middle over it on a phone, a little smaller.
+func heroBox(c *ui.Context) ui.Element {
+	if isCompact(c) {
+		return ui.Box(c).Size(196, 196).AlignSelf(ui.Center).Margin(4, 0, 6, 0)
+	}
+	return ui.Box(c).Size(212, 212)
+}
+
 // compactPlayerBar is what plays, floating over the foot of the page as a
 // card: its cover and title open Now Playing, beside play and next, over a
 // line of its progress.

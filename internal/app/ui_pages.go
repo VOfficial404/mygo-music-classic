@@ -291,7 +291,7 @@ func (a *app) playlistPage(c *ui.Context) {
 func (a *app) playlistHeader(c *ui.Context, pl *music.Playlist) {
 	p := a.pal
 	heroRow(c).Padding(0, 0, 26, 0).Children(func() {
-		ui.Box(c).Size(212, 212).Radius(14).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
+		heroBox(c).Radius(14).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
 			a.coverFill(c, pl.ImageURL, 600, 14)
 		})
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
@@ -347,7 +347,7 @@ func (a *app) likedPage(c *ui.Context) {
 	header := func(c *ui.Context) {
 		p := a.pal
 		heroRow(c).Padding(0, 0, 26, 0).Children(func() {
-			ui.Box(c).Size(212, 212).Radius(14).Center().Shadow(0, 18, 40, -10, p.cardShade).TextColor(white).
+			heroBox(c).Radius(14).Center().Shadow(0, 18, 40, -10, p.cardShade).TextColor(white).
 				LinearGradient(ui.LinearGradient{Angle: 135, Oklab: true, From: ui.Oklch(0.72, 0.17, 10), To: ui.Oklch(0.58, 0.22, 350)}).
 				Children(func() { ui.Icon(c, iconHeartFill).Size(84, 84) })
 			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
@@ -490,8 +490,15 @@ func (a *app) trackRow(c *ui.Context, tracks []music.Track, i int, covers bool, 
 	tr := &tracks[i]
 	// An album's page has no column of the album its songs are on.
 	wide := contentWidth(c) > 820 && a.route.page != pageAlbum
+	// A phone has no room for the numbers, and no pointer to hover a heart:
+	// a song's menu takes the place of its length.
+	compact := isCompact(c)
+	height := float32(54)
+	if compact {
+		height = 60
+	}
 	playing := sameTrack(a.pl.Current(), tr)
-	row := ui.ButtonBase(c.Key(tr.ID)).Height(54).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name).
+	row := ui.ButtonBase(c.Key(tr.ID)).Height(height).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name).
 		ContextMenu(a.songItems(tr, pid))
 	hovered := row.Hovered()
 	bg := ui.Transparent
@@ -507,18 +514,20 @@ func (a *app) trackRow(c *ui.Context, tracks []music.Track, i int, covers bool, 
 	}
 	a.wantLike(tr)
 	row.Children(func() {
-		ui.Box(c).Width(26).Center().Children(func() {
-			switch {
-			case playing:
-				a.nowPlayingBars(c)
-			case hovered && !tr.Unavailable:
-				ui.Icon(c, iconPlay).Size(13, 13).TextColor(p.text)
-			default:
-				ui.Textf(c, "%d", i+1).FontSize(13).FontFeatures("tnum").TextColor(p.faint)
-			}
-		})
+		if !compact {
+			ui.Box(c).Width(26).Center().Children(func() {
+				switch {
+				case playing:
+					a.nowPlayingBars(c)
+				case hovered && !tr.Unavailable:
+					ui.Icon(c, iconPlay).Size(13, 13).TextColor(p.text)
+				default:
+					ui.Textf(c, "%d", i+1).FontSize(13).FontFeatures("tnum").TextColor(p.faint)
+				}
+			})
+		}
 		if covers {
-			a.cover(c, tr.Album.ImageURL, 96, 38, 6)
+			a.cover(c, tr.Album.ImageURL, 96, 42, 6)
 		}
 		ui.Column(c).Grow(3).Basis(0).MinWidth(0).Gap(3).Children(func() {
 			name := p.text
@@ -544,10 +553,19 @@ func (a *app) trackRow(c *ui.Context, tracks []music.Track, i int, covers bool, 
 				a.likeButton(c.Key("like"), tr, 15, p.muted)
 			}
 		})
-		ui.Text(c, clock(tr.Length())).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).Width(44).TextAlign(ui.End)
+		if compact {
+			a.songMenu(c.Key("more"), tr, 18, p.muted).Margin(0, -6, 0, 0)
+		} else {
+			ui.Text(c, clock(tr.Length())).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).Width(44).TextAlign(ui.End)
+		}
 	})
-	if row.Clicked() && !tr.Unavailable {
-		a.pl.PlayTrack(tracks, i)
+	if row.Clicked() {
+		if tr.Unavailable {
+			// Said, rather than a tap that does nothing.
+			a.toast = T("This song isn't available")
+		} else {
+			a.pl.PlayTrack(tracks, i)
+		}
 	}
 }
 

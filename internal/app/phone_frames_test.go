@@ -37,10 +37,22 @@ func phoneApp() *app {
 // Now Playing on a phone.
 func TestPhoneFrames(t *testing.T) {
 	dir := framesDir(t)
+	was := onPhone
+	onPhone = true
+	defer func() { onPhone = was }()
 	a := phoneApp()
 	tt := ui.NewTester(a.view, phoneW, phoneH)
 	settled(tt)
 	saveFrame(t, dir, "phone-playlist.png", tt.Image())
+
+	a.library.home = &music.Browse{Sections: []music.Section{
+		{Title: "Daily Picks", Tracks: a.playlists["10"].Tracks},
+		{Title: "Playlists for You", Playlists: a.mine},
+		{Title: "New Songs", Tracks: a.playlists["10"].Tracks[:4]},
+	}}
+	a.openTab(tabHome)
+	settled(tt)
+	saveFrame(t, dir, "phone-home.png", tt.Image())
 
 	if err := tt.Click(T("Mine")); err != nil {
 		t.Fatal(err)

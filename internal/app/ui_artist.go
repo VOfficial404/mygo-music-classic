@@ -203,7 +203,7 @@ func (a *app) artistHeader(c *ui.Context, d *artistData) {
 	songs := d.page.Tracks
 	lib := a.library
 	heroRow(c).Padding(0, 0, 8, 0).Children(func() {
-		ui.Box(c).Size(artistPhotoSize, artistPhotoSize).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
+		heroBox(c).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
 			a.coverFill(c, ar.ImageURL, 600, artistPhotoSize/2)
 		})
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {

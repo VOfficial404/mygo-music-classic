@@ -155,6 +155,7 @@ type app struct {
 	quiet                 quietState    // the quiet parts of the song playing, for its top comments
 	sig                   playerSig
 	quitting              bool
+	diag                  diagState     // the playback test of the settings, as it goes
 
 	settings    settings
 	settingsWin *mygo.Window
@@ -292,6 +293,7 @@ func Run() error {
 	// A heap that grows by half, not by all of itself, before it's collected:
 	// a music player idles most of the time, and its memory is what's seen.
 	debug.SetGCPercent(50)
+	keepLog()
 	a := &app{
 		signInOver:  new(atomic.Pointer[mygo.Window]),
 		settingText: map[string]*string{},

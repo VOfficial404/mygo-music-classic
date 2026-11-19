@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"math/cmplx"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -18,6 +19,17 @@ import (
 
 	"mygo-music/internal/music"
 )
+
+// songClient downloads songs. A server that takes the connection and never
+// answers fails the song, rather than leaving it loading for good.
+var songClient = &http.Client{Transport: &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+	TLSHandshakeTimeout:   15 * time.Second,
+	ResponseHeaderTimeout: 20 * time.Second,
+	IdleConnTimeout:       90 * time.Second,
+	ForceAttemptHTTP2:     true,
+}}
 
 // A download fetches a song as it plays: readers wait for the bytes they
 // need, so playback starts with the first ones. The song comes into a file
@@ -104,7 +116,7 @@ func (d *download) run(ctx context.Context, url string, headers map[string]strin
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	res, err := music.HeadersStay(http.DefaultClient, req.URL.Hostname(), headers).Do(req)
+	res, err := music.HeadersStay(songClient, req.URL.Hostname(), headers).Do(req)
 	if err != nil {
 		finish(err)
 		return

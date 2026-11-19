@@ -491,6 +491,44 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 		})
 	})
 
+	add("diagnostics", T("Diagnostics"), iconRefresh, func(row settingsRow, block settingsBlock) {
+		row(T("Playback Test"), T("Checks asking for a song, downloading it and the sound output, one after another"), func() {
+			label := T("Run")
+			if a.diag.running {
+				label = T("Running…")
+			}
+			if ui.Button(c.Key("diagnose"), label).Disabled(a.diag.running).Clicked() {
+				a.runDiagnosis()
+			}
+		})
+		if len(a.diag.lines) > 0 {
+			block(strings.Join(a.diag.lines, " "), func() {
+				ui.Column(c.Key("diag-lines")).Padding(10, 16).Gap(6).Children(func() {
+					for i, line := range a.diag.lines {
+						ui.Text(c.Key(i), line).FontSize(12.5).LineHeight(1.4)
+					}
+				})
+			})
+		}
+		row(T("Log"), T("What the app wrote down lately, to send with a report of a problem"), func() {
+			if ui.Button(c.Key("copy-log"), T("Copy")).Clicked() {
+				copyText(strings.Join(appLog.last(logLines), "\n"))
+				a.toast = T("Copied")
+			}
+		})
+		block(T("Log"), func() {
+			lines := appLog.last(12)
+			if len(lines) == 0 {
+				return
+			}
+			ui.Column(c.Key("log-lines")).Padding(10, 16).Gap(3).Children(func() {
+				for i, line := range lines {
+					ui.Text(c.Key(i), line).FontSize(11).TextColor(p.muted).MaxLines(3)
+				}
+			})
+		})
+	})
+
 	add("experiments", T("Experiments"), iconFlask, func(row settingsRow, block settingsBlock) {
 		row(T("Smoke on the Progress Bar"), T("The progress bar turns into a light trailing smoke, moving with the music. Uses a little more power."), func() {
 			if ui.Switch(c.Key("smoke"), &s.Smoke).Label(T("Smoke on the Progress Bar")).Changed() {

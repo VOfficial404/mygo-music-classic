@@ -311,6 +311,11 @@ func (a *app) insets(c *ui.Context) (top, bottom float32) {
 		top += topEdgePad
 	}
 	if isCompact(c) {
+		// A phone has no window buttons, and the first page of a tab no back
+		// button: nothing for the strip to hold.
+		if onPhone && len(a.history) == 0 {
+			top = 4
+		}
 		return top, a.compactBottom()
 	}
 	return top, playerBarHeight
