@@ -72,6 +72,7 @@ func (a *app) view(c *ui.Context) {
 				a.pageTop(c)
 				if compact {
 					a.compactPlayerBar(c)
+					a.tabBar(c)
 				} else {
 					a.playerBar(c)
 				}
@@ -79,7 +80,6 @@ func (a *app) view(c *ui.Context) {
 		})
 		a.nowPlayingLayer(c, npOpen, npSettled)
 	})
-	a.drawer(c)
 	a.signInDialog(c, a.pal, false)
 	a.playlistNameDialog(c)
 	a.deletePlaylistDialog(c)
@@ -93,8 +93,12 @@ func (a *app) view(c *ui.Context) {
 
 func (a *app) shortcuts(c *ui.Context) {
 	// The side buttons of a mouse, the keys of keyboards that have them
-	// and swipes between pages, and the keys of Music.
-	c.OnShortcut(0, ui.KeyBack, a.back)
+	// and swipes between pages, and the keys of Music. Back only with
+	// somewhere to go back to: on a phone, the system's back leaves the app
+	// when the app doesn't take it.
+	if a.nowPlaying || len(a.history) > 0 {
+		c.OnShortcut(0, ui.KeyBack, a.back)
+	}
 	c.OnShortcut(0, ui.KeyForward, a.goForward)
 	c.OnShortcut(ui.Cmd, ui.KeyBracketLeft, a.back)
 	c.OnShortcut(ui.Cmd, ui.KeyBracketRight, a.goForward)
@@ -117,7 +121,7 @@ func (a *app) shortcuts(c *ui.Context) {
 // closes Now Playing over it, though it is the page open. A page of another
 // source makes that source the active one.
 func (a *app) open(r route) {
-	a.nowPlaying, a.drawerOpen = false, false
+	a.nowPlaying = false
 	if r.src == "" {
 		r.src = a.route.src
 	}
@@ -180,6 +184,8 @@ func (a *app) load(r route) {
 		if !lib.savedAlbumsPaged.loaded {
 			a.loadSavedAlbums(lib)
 		}
+	case pageSettings:
+		a.measureCache()
 	case pageBrowse:
 		a.loadBrowse(lib, r.id, false)
 	case pageSection:
@@ -253,7 +259,12 @@ func (a *app) sidebar(c *ui.Context) {
 func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 	p := a.pal
 	selected := a.route.page == r.page && !a.nowPlaying && (r.page != pageBrowse || a.route.id == r.id)
-	b := ui.ButtonBase(c.Key(label)).Height(34).PaddingX(10).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
+	// As tall as a fingertip on a phone.
+	height := float32(34)
+	if isCompact(c) {
+		height = 46
+	}
+	b := ui.ButtonBase(c.Key(label)).Height(height).PaddingX(10).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
 	bg := ui.Transparent
 	switch {
 	case selected:
@@ -300,7 +311,7 @@ func (a *app) insets(c *ui.Context) (top, bottom float32) {
 		top += topEdgePad
 	}
 	if isCompact(c) {
-		return top, compactBarHeight + 2*compactBarGap
+		return top, a.compactBottom()
 	}
 	return top, playerBarHeight
 }
@@ -369,15 +380,8 @@ func (a *app) pageTop(c *ui.Context) {
 		Material(glass.ScrollEdge{Hard: true, Background: a.pal.bg})
 	// The pointer over it brings the edge up too, as AppKit's does.
 	edge.Opacity(edgeShown(edge, a.underTop || edge.Hovered()))
-	compact := isCompact(c)
-	if compact || len(a.history) > 0 || len(a.forward) > 0 {
+	if len(a.history) > 0 || len(a.forward) > 0 {
 		ui.Row(c).Absolute().Top(0).Left(20).Height(topBar(c)).AlignItems(ui.Center).Gap(4).Children(func() {
-			if compact {
-				a.menuButton(c)
-				if len(a.history) == 0 {
-					return
-				}
-			}
 			back := iconButton(c.Key("back"), iconBack, 18, a.pal.muted, T("Back")).Disabled(len(a.history) == 0)
 			if len(a.history) == 0 {
 				back.Opacity(0.35)
@@ -425,6 +429,12 @@ func (a *app) content(c *ui.Context) {
 		a.browsePage(c)
 	case pageSection:
 		a.sectionPage(c)
+	case pageMine:
+		a.minePage(c)
+	case pageSearchStart:
+		a.searchStartPage(c)
+	case pageSettings:
+		a.phoneSettingsPage(c)
 	}
 }
 

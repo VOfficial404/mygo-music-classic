@@ -33,6 +33,12 @@ const (
 	pageSavedAlbums
 	pageBrowse
 	pageSection
+	// The pages of the tabs of the compact layout: the listener's own, search
+	// before anything is searched for, and the settings, which a phone shows
+	// in the window rather than in one of their own.
+	pageMine
+	pageSearchStart
+	pageSettings
 )
 
 type route struct {
@@ -69,8 +75,9 @@ type app struct {
 
 	wasBehind bool // the window wasn't at the front as last built
 
-	drawerOpen bool // the library slides in over the page, in the compact layout of phones
-	npCompact  bool // Now Playing shows one pane at a time, as on a phone
+	npCompact   bool // Now Playing shows one pane at a time, as on a phone
+	phoneTab    int  // the tab of the compact layout last chosen (tabHome, tabSearch, tabMine)
+	focusSearch bool // the search tab's field takes the focus as it next shows
 
 	route   route
 	history []route

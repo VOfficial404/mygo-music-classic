@@ -101,8 +101,13 @@ func (a *app) promptSignIn(lib *library) {
 }
 
 // promptSignInInSettings asks it in the settings window, where they asked,
-// instead of bringing up the main window behind it.
+// instead of bringing up the main window behind it. A phone's settings are a
+// page of the main window, which asks there.
 func (a *app) promptSignInInSettings(lib *library) {
+	if onPhone {
+		a.promptSignIn(lib)
+		return
+	}
 	a.signIn = signInDialog{open: true, lib: lib, here: true, gen: a.signIn.gen + 1}
 }
 

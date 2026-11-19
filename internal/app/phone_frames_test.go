@@ -33,8 +33,8 @@ func phoneApp() *app {
 	return a
 }
 
-// With MM_FRAMES set, saves a playlist, the library drawer and Now Playing on
-// a phone.
+// With MM_FRAMES set, saves a playlist, the listener's tab, the settings and
+// Now Playing on a phone.
 func TestPhoneFrames(t *testing.T) {
 	dir := framesDir(t)
 	a := phoneApp()
@@ -42,23 +42,46 @@ func TestPhoneFrames(t *testing.T) {
 	settled(tt)
 	saveFrame(t, dir, "phone-playlist.png", tt.Image())
 
-	if err := tt.Click("Library"); err != nil {
+	if err := tt.Click(T("Mine")); err != nil {
 		t.Fatal(err)
 	}
 	settled(tt)
+	saveFrame(t, dir, "phone-mine.png", tt.Image())
+
+	a.open(route{page: pageSettings})
 	settled(tt)
-	saveFrame(t, dir, "phone-drawer.png", tt.Image())
-	a.drawerOpen = false
-	settled(tt)
+	saveFrame(t, dir, "phone-settings.png", tt.Image())
 
 	a.nowPlaying, a.npPane = true, paneLyrics
 	tt.SetDark(true)
 	tt.Advance(2 * time.Second)
 	tt.Frame()
 	saveFrame(t, dir, "phone-now-playing.png", tt.Image())
+}
 
-	a.npPane = paneQueue
-	tt.Advance(time.Second)
+// A tab opens its first page and forgets the pages opened before it, so the
+// system's back leaves the app from there rather than going through them; a
+// page opened from a tab stays under it.
+func TestPhoneTabs(t *testing.T) {
+	a := phoneApp()
+	tt := ui.NewTester(a.view, phoneW, phoneH)
+	settled(tt)
+	a.open(route{page: pageAlbum, id: "1"})
+	if err := tt.Click(T("Mine")); err != nil {
+		t.Fatal(err)
+	}
+	if a.route.page != pageMine || len(a.history) != 0 {
+		t.Fatalf("on %v with %d pages behind", a.route.page, len(a.history))
+	}
+	a.open(route{page: pageLiked})
 	tt.Frame()
-	saveFrame(t, dir, "phone-queue.png", tt.Image())
+	if a.tabOf(a.route.page) != tabMine {
+		t.Errorf("the liked songs are of tab %d", a.tabOf(a.route.page))
+	}
+	if err := tt.Click(T("Search")); err != nil {
+		t.Fatal(err)
+	}
+	if a.route.page != pageSearchStart {
+		t.Errorf("the search tab opened %v", a.route.page)
+	}
 }

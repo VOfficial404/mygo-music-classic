@@ -180,6 +180,10 @@ func (a *app) searchHeader(c *ui.Context, d *searchData) {
 	if d.page.loaded && r.kind == music.SearchTracks {
 		sub = Tf("Search · %s", i18n.Songs(len(d.res.Tracks)))
 	}
+	// A phone has no sidebar to search again from.
+	if isCompact(c) {
+		a.searchField(c)
+	}
 	a.heading(c, "“"+r.query+"”", sub)
 	var kinds []music.SearchKind
 	var labels []string

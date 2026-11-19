@@ -238,7 +238,7 @@ var zhCN = map[string]string{
 	"What's asked of NetEase Cloud Music, from the next song on":                                                            "向网易云音乐请求的音质，从下一首开始生效",
 	"Adjust each song's volume by the loudness NetEase Cloud Music measured of it, for them to sound as loud as each other": "按网易云音乐测得的响度调整每首歌的音量，让歌曲听起来一样响",
 	"Enable %s": "启用 %s",
-	"Library":   "音乐库",
+	"Mine":      "我的",
 	"The download failed. Check your network and try again.": "下载失败，请检查网络后重试",
 	"Downloading %s / %s":           "正在下载 %s / %s",
 	"Download":                      "下载",

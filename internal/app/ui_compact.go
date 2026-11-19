@@ -4,14 +4,13 @@ import (
 	"runtime"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/mobile"
 
 	"mygo-music/internal/music"
 )
 
 // compactWidth is the width below which the window takes the layout of
-// phones: the library in a drawer, a slim player floating over the page, and
-// Now Playing one pane at a time.
+// phones: tabs along the foot, a slim player over them, and Now Playing one
+// pane at a time.
 const compactWidth = 720
 
 // isCompact reports whether the window is as narrow as a phone.
@@ -24,31 +23,185 @@ func isCompact(c *ui.Context) bool {
 // hardware buttons for the volume and no pointer to hover.
 var onPhone = runtime.GOOS == "android" || runtime.GOOS == "ios"
 
-// compactBarHeight is the height of the player floating at the foot of the
-// page in the compact layout, and compactBarGap the room around it.
+// compactBarHeight is the height of the player floating over the tabs in the
+// compact layout, compactBarGap the room around it, and tabBarHeight the
+// height of the tabs.
 const (
 	compactBarHeight = 60
 	compactBarGap    = 8
+	tabBarHeight     = 56
 )
 
-// drawer is the sidebar, sliding in from the side in the compact layout.
-func (a *app) drawer(c *ui.Context) {
-	if !isCompact(c) {
-		a.drawerOpen = false
-		return
+// The tabs of the compact layout.
+const (
+	tabHome = iota
+	tabSearch
+	tabMine
+)
+
+// compactBottom is the room the tabs, and the player over them while a song
+// is loaded, take at the foot of a page.
+func (a *app) compactBottom() float32 {
+	if a.pl != nil && a.pl.Current() != nil {
+		return tabBarHeight + compactBarHeight + 2*compactBarGap
 	}
-	w, _ := c.Size()
+	return tabBarHeight
+}
+
+// tabOf is the tab a page belongs to: what it was opened from, for a page
+// opened from another.
+func (a *app) tabOf(page pageKind) int {
+	switch page {
+	case pageHome:
+		return tabHome
+	case pageSearch, pageSearchStart:
+		return tabSearch
+	case pageMine, pageSettings:
+		return tabMine
+	}
+	return a.phoneTab
+}
+
+// openTab goes to the first page of a tab, leaving the pages opened before,
+// as tabs of a phone's apps do: the back button leaves the app from there.
+func (a *app) openTab(tab int) {
+	a.nowPlaying = false
+	a.history, a.forward = nil, nil
+	a.phoneTab = tab
+	r := route{page: pageHome}
+	switch tab {
+	case tabSearch:
+		r = route{page: pageSearchStart}
+		if a.searched.query != "" && a.searched.src == a.id {
+			r = a.searched
+		} else {
+			a.focusSearch = true
+		}
+	case tabMine:
+		r = route{page: pageMine}
+	}
+	a.show(r)
+}
+
+// tabBar runs along the foot of the window in the compact layout.
+func (a *app) tabBar(c *ui.Context) {
 	p := a.pal
-	mobile.Drawer(c, &a.drawerOpen, mobile.DrawerOptions{Width: min(300, w-56)}, func() {
-		ui.Column(c.Key("drawer")).Fill().Background(p.sidebar).Children(func() { a.sidebar(c) })
+	at := a.tabOf(a.route.page)
+	a.phoneTab = at
+	ui.Row(c.Key("tab-bar")).Absolute().Left(0).Right(0).Bottom(0).Height(tabBarHeight).
+		Background(p.sidebar).AlignItems(ui.Stretch).Children(func() {
+		ui.Box(c).Absolute().Top(0).Left(0).Right(0).Height(0.5).Background(p.hairline)
+		for _, t := range []struct {
+			tab   int
+			icon  *ui.SVG
+			label string
+		}{{tabHome, iconHome, T("Home")}, {tabSearch, iconSearch, T("Search")}, {tabMine, iconUser, T("Mine")}} {
+			color := p.muted
+			if t.tab == at {
+				color = p.accent
+			}
+			b := ui.ButtonBase(c.Key(t.label)).Grow(1).Basis(0).Gap(3).Center().FocusRing(false).Label(t.label)
+			b.Children(func() {
+				ui.Icon(c, t.icon).Size(22, 22).TextColor(color)
+				ui.Text(c, t.label).FontSize(10.5).FontWeight(600).TextColor(color)
+			})
+			if b.Clicked() {
+				a.openTab(t.tab)
+			}
+		}
 	})
 }
 
-// menuButton opens the drawer, at the start of the strip over a page.
-func (a *app) menuButton(c *ui.Context) {
-	if iconButton(c.Key("menu"), iconMenu, 20, a.pal.text, T("Library")).Clicked() {
-		a.drawerOpen = true
+// minePage is the listener's own tab in the compact layout: who's signed in,
+// the source's pages, their playlists, and the settings.
+func (a *app) minePage(c *ui.Context) {
+	pad := pagePadding(c)
+	top, bottom := a.insets(c)
+	ui.Scroll(c.Key(a.route)).TrackScroll(&a.pageScroll).Grow(1).Padding(top+pageGap, pad-12, bottom+24, pad-12).
+		ScrollbarInsets(top, 0, bottom, 0).Gap(4).Children(func() {
+		a.startMark(c)
+		defer a.endMark(c)
+		a.mineHeader(c)
+		a.sourceSwitcher(c)
+		for _, n := range a.sidebarItems() {
+			if n.route.page != pageHome {
+				a.navItem(c, n.icon, n.label, n.route)
+			}
+		}
+		if a.can("playlists") {
+			a.myPlaylists(c, T("My Playlists"), a.mine, true, &a.mineCollapsed)
+			a.myPlaylists(c, T("Saved Playlists"), a.saved, false, &a.savedCollapsed)
+		}
+		ui.Box(c).Height(16)
+		a.navItem(c, iconSettings, T("Settings"), route{page: pageSettings})
+	})
+}
+
+// mineHeader is who's signed in, large, with what they can do about it.
+func (a *app) mineHeader(c *ui.Context) {
+	p := a.pal
+	lib := a.library
+	if lib.account == nil && lib.accountUnknown() {
+		a.accountRow(c)
+		return
 	}
+	ui.Row(c.Key("me")).Gap(14).AlignItems(ui.Center).Padding(4, 10, 18, 10).Children(func() {
+		acc := lib.account
+		if acc == nil {
+			ui.Box(c).Size(56, 56).Radius(28).Background(p.press).Center().Children(func() {
+				ui.Icon(c, iconUser).Size(26, 26).TextColor(p.muted)
+			})
+			if lib.can("signIn") && pillButton(c.Key("sign-in"), nil, Tf("Sign in to %s", lib.name()), p.accent, p.onAccent).Clicked() {
+				a.promptSignIn(lib)
+			}
+			return
+		}
+		a.avatar(c, acc.ImageURL, 56, p.press)
+		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
+			ui.Text(c, acc.Name).FontSize(19).FontWeight(700).SingleLine()
+			ui.Row(c).Gap(8).Children(func() {
+				if acc.Page != "" && pillButton(c.Key("my-page"), nil, T("My Page"), p.hover.Over(p.bg), p.text).Clicked() {
+					a.openMyPage(lib)
+				}
+				if lib.can("signOut") && pillButton(c.Key("sign-out"), nil, T("Sign Out"), p.hover.Over(p.bg), p.text).Clicked() {
+					a.signOut(lib)
+				}
+			})
+		})
+	})
+}
+
+// searchStartPage is the search tab before anything is searched for: the
+// field, and the searches before, a tap from searching again.
+func (a *app) searchStartPage(c *ui.Context) {
+	p := a.pal
+	pad := pagePadding(c)
+	top, bottom := a.insets(c)
+	ui.Scroll(c.Key(a.route)).TrackScroll(&a.pageScroll).Grow(1).Padding(top+pageGap, pad, bottom+24, pad).Children(func() {
+		a.startMark(c)
+		defer a.endMark(c)
+		a.searchField(c)
+		if a.focusSearch {
+			a.focusSearch = false
+			a.searchBox.Focus(c)
+		}
+		if len(a.settings.SearchHistory) == 0 {
+			return
+		}
+		ui.Row(c).AlignItems(ui.Center).Margin(10, 0, 12, 0).Children(func() {
+			ui.Text(c, T("Recent Searches")).FontSize(15).FontWeight(700).Grow(1)
+			if iconButton(c.Key("clear-history"), iconTrash, 16, p.muted, T("Clear")).Clicked() {
+				a.clearSearchHistory()
+			}
+		})
+		ui.Row(c).Wrap().Gap(8).Children(func() {
+			for _, q := range a.settings.SearchHistory {
+				if pillButton(c.Key(q), nil, q, p.hover.Over(p.bg), p.text).Clicked() {
+					a.search(q)
+				}
+			}
+		})
+	})
 }
 
 // heroRow lays out the head of a page: its picture beside its title, or
@@ -67,11 +220,14 @@ func (a *app) compactPlayerBar(c *ui.Context) {
 	p := a.pal
 	pl := a.pl
 	tr := pl.Current()
+	if tr == nil {
+		return
+	}
 	a.tickTimes(c)
-	card := ui.Row(c.Key("mini-player")).Absolute().Left(compactBarGap).Right(compactBarGap).Bottom(compactBarGap).
+	card := ui.Row(c.Key("mini-player")).Absolute().Left(compactBarGap).Right(compactBarGap).Bottom(tabBarHeight+compactBarGap).
 		Height(compactBarHeight).Padding(0, 6, 0, 8).Gap(4).Radius(14).AlignItems(ui.Center).
 		Background(p.sidebar).Border(1, p.hairline).Shadow(0, 6, 20, -6, p.cardShade)
-	if tr != nil && pl.Duration() > 0 {
+	if pl.Duration() > 0 {
 		done := float32(pl.Position()) / float32(pl.Duration())
 		accent := p.accent
 		card.DrawOver(func(pt *ui.Painter, r ui.Rect) {
@@ -79,13 +235,6 @@ func (a *app) compactPlayerBar(c *ui.Context) {
 		})
 	}
 	card.Children(func() {
-		if tr == nil {
-			ui.Box(c).Size(44, 44).Radius(8).Background(p.hover).Center().Children(func() {
-				ui.Icon(c, iconNote).Size(18, 18).TextColor(p.faint)
-			})
-			ui.Text(c, T("Not Playing")).FontSize(13).TextColor(p.muted).Margin(0, 0, 0, 8)
-			return
-		}
 		info := ui.ButtonBase(c.Key("info")).Grow(1).Shrink(1).MinWidth(0).Gap(10).AlignItems(ui.Center).Justify(ui.Start).
 			FocusRing(false).Label(T("Open Now Playing"))
 		info.Children(func() {
@@ -163,6 +312,10 @@ func (a *app) npCompactBody(c *ui.Context, tr *music.Track, art *artwork, accent
 				}
 				ui.Text(c, tr.Name).FontSize(20).FontWeight(700).LetterSpacing(-0.3).SingleLine()
 				a.artistLinks(c, tr, white.Alpha(0.6), white, true).FontSize(14).SingleLine()
+				// Why it doesn't play, where it can't be missed.
+				if err := pl.Err(); err != "" {
+					ui.Text(c, err).FontSize(13).FontWeight(600).TextColor(ui.Hex("#ff8a8a")).MaxLines(2)
+				}
 			})
 			a.likeButton(c.Key("like"), tr, 22, white.Alpha(0.7))
 			a.songMenu(c.Key("more"), tr, 22, white.Alpha(0.7)).Margin(0, -8, 0, 0)

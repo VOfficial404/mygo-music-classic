@@ -2,7 +2,7 @@
   "name": "MyGo Music Classic",
   "slug": "mygo-music-classic",
   "identifier": "io.github.vofficial404.mygomusicclassic",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "copyright": "© 2026 VOfficial404, based on MyGo Music by EGOIST",
   "license": "AGPL-3.0-only",
   "out": "build",

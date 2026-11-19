@@ -16,10 +16,15 @@ import (
 	"mygo-music/internal/music"
 )
 
-// openSettings shows the settings window, opening it the first time.
+// openSettings shows the settings window, opening it the first time. A phone
+// shows them as a page of the main window, which has its back button.
 func (a *app) openSettings() {
 	if a.win == nil {
 		return // no app to show a window in, as in tests
+	}
+	if onPhone {
+		a.open(route{page: pageSettings})
+		return
 	}
 	if a.settingsWin != nil {
 		a.settingsWin.Show()
@@ -46,10 +51,7 @@ func (a *app) openSettings() {
 		// Windows it stays out of sight until Alt shows it.
 		AutoHideMenuBar: true,
 		BackgroundColor: "light-dark(#f4f4f6, #1c1c1f)",
-		// On a phone it goes on the main window's stack, under the system's
-		// bar with its back button.
-		Hidden:  onPhone,
-		Content: ui.View(a.settingsView),
+		Content:         ui.View(a.settingsView),
 	})
 	a.settingsWin.OnClosed(func() {
 		a.settingsWin = nil
@@ -59,9 +61,6 @@ func (a *app) openSettings() {
 		}
 		a.syncDock()
 	})
-	if onPhone {
-		a.win.Push(a.settingsWin)
-	}
 	a.syncDock()
 }
 
@@ -180,21 +179,6 @@ func (a *app) settingsView(c *ui.Context) {
 		}
 	}
 
-	if isCompact(c) {
-		// On a phone the pages are a row of chips over the one chosen.
-		ui.Column(c).Fill().Children(func() {
-			ui.Column(c).Padding(12, 16, 6, 16).Children(func() { a.settingsSearch(c, p) })
-			ui.ScrollHorizontal(c.Key("pages")).Shrink(0).Padding(0, 12, 6, 12).Gap(4).Children(func() {
-				for _, sec := range sections {
-					a.settingsNavItem(c, p, sec, query == "" && sec.id == current.id)
-				}
-			})
-			ui.Scroll(c.Key(current.id+"\x00"+query)).Grow(1).Padding(8, 16, 32, 16).Gap(8).Children(results)
-		})
-		a.signInDialog(c, p, true)
-		return
-	}
-
 	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
 		// Under the window buttons where they sit over the sidebar. Where nothing
 		// takes the press, it moves the window, as the title bar it reaches into would.
@@ -237,6 +221,33 @@ func (a *app) settingsView(c *ui.Context) {
 		})
 	})
 	a.signInDialog(c, p, true)
+}
+
+// phoneSettingsPage is the settings as a page of the main window, on a phone:
+// every section, one under the other, under a field that finds a setting.
+func (a *app) phoneSettingsPage(c *ui.Context) {
+	p := a.pal
+	pad := pagePadding(c)
+	sections := a.settingsSections(c, p)
+	query := strings.ToLower(strings.TrimSpace(a.settingsQuery))
+	top, bottom := a.insets(c)
+	ui.Scroll(c.Key(a.route)).TrackScroll(&a.pageScroll).Grow(1).Padding(top+pageGap, pad, bottom+32, pad).Gap(8).
+		ScrollbarInsets(top, 0, bottom, 0).Children(func() {
+		a.startMark(c)
+		defer a.endMark(c)
+		a.heading(c, T("Settings"), "")
+		a.settingsSearch(c, p)
+		found := false
+		for _, sec := range sections {
+			if query == "" || a.settingsFinds(sec, query) {
+				found = true
+				a.settingsGroup(c, p, sec, sec.title, query)
+			}
+		}
+		if !found {
+			ui.Text(c, T("No settings found")).FontSize(13.5).TextColor(p.muted).Margin(8, 4, 0, 4)
+		}
+	})
 }
 
 // settingsSidebarWidth is the width of the list of the settings' pages.
