@@ -1,0 +1,47 @@
+{
+  "name": "MyGo Music Classic",
+  "slug": "mygo-music-classic",
+  "identifier": "io.github.vofficial404.mygomusicclassic",
+  "version": "1.0.0",
+  "copyright": "© 2026 VOfficial404, based on MyGo Music by EGOIST",
+  "license": "AGPL-3.0-only",
+  "out": "build",
+  "updates": {
+    "publicKey": "16flNjvKW9T6YgNbh8TuoT8vESP9CA5tPzrixYTIA7Q=",
+    "github": "VOfficial404/mygo-music-classic"
+  },
+  "macos": {
+    "icon": "icon/AppIcon.icon",
+    "minimumSystemVersion": "13.0"
+  },
+  "windows": {
+    "displayName": "MyGo Music Classic"
+  },
+  "linux": {
+    "comment": "A NetEase Cloud Music client, native and light",
+    "categories": [
+      "AudioVideo",
+      "Audio",
+      "Player"
+    ],
+    "webview": false
+  },
+  "ios": {
+    "minimumSystemVersion": "17.0",
+    "backgroundModes": [
+      "audio"
+    ],
+    "launchScreen": {
+      "background": "#141416"
+    }
+  },
+  "android": {
+    "minSdk": 26,
+    "permissions": [
+      "FOREGROUND_SERVICE",
+      "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+      "WAKE_LOCK"
+    ],
+    "splash": "#141416"
+  }
+}

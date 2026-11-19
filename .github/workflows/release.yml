@@ -1,0 +1,226 @@
+# Pushing a tag such as v1.0.0 builds the apps of macOS, Windows, Linux,
+# Android and iOS, and uploads them to the release of the tag, which is
+# published once the desktop and Android builds are in. Running the workflow
+# by hand does the same for the version in mygo.json, tagging the commit when
+# the tag isn't there yet.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # the tag, the release, and the uploads to it
+
+jobs:
+  draft-release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Find the tag
+        id: tag
+        run: |
+          tag="v$(jq -r .version mygo.json)"
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            if [ "$GITHUB_REF_NAME" != "$tag" ]; then
+              echo "::error::$GITHUB_REF_NAME doesn't match the version of mygo.json, $tag"
+              exit 1
+            fi
+          elif [ -z "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
+            git tag "$tag"
+            git push origin "refs/tags/$tag"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # The notes are the version's section of CHANGELOG.md.
+            awk -v v="${TAG#v}" '
+              /^## / { if (found) exit; found = index($0, "[" v "]") > 0; next }
+              found
+            ' CHANGELOG.md > notes.md
+            if [ -s notes.md ]; then
+              notes=(--notes-file notes.md)
+            else
+              notes=(--generate-notes)
+            fi
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "MyGo Music Classic $TAG" "${notes[@]}"
+          fi
+
+  desktop:
+    needs: draft-release
+    name: ${{ matrix.name }}
+    defaults:
+      run:
+        shell: bash
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-latest, platform: "darwin/arm64,darwin/amd64" }
+          - { name: Windows, os: windows-latest, platform: "windows/amd64,windows/arm64" }
+          - { name: Linux, os: ubuntu-latest, platform: "linux/amd64,linux/arm64" }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ needs.draft-release.outputs.tag }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      # On Windows, mygo downloads NSIS when it is not installed: kept here
+      # between runs. go.sum pins the CLI, which pins NSIS.
+      - name: Cache NSIS
+        if: runner.os == 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: ~\AppData\Local\mygo\nsis-*
+          key: nsis-${{ hashFiles('go.sum') }}
+      - name: Build and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: go tool mygo build -platform "${{ matrix.platform }}" -upload
+
+  android:
+    needs: draft-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ needs.draft-release.outputs.tag }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      # The upload key, a PKCS#12 file in the secrets, goes into a keystore
+      # of its own under a known alias, which the configuration names for
+      # this build only: builds elsewhere sign with the debug key.
+      - name: Set up the signing key
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "$ANDROID_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/keys/upload.p12"
+          alias="$(keytool -list -v -storetype PKCS12 -keystore "$RUNNER_TEMP/keys/upload.p12" -storepass "$ANDROID_KEYSTORE_PASSWORD" | sed -n 's/^Alias name: //p' | head -1)"
+          keytool -importkeystore -noprompt \
+            -srckeystore "$RUNNER_TEMP/keys/upload.p12" -srcstoretype PKCS12 -srcstorepass "$ANDROID_KEYSTORE_PASSWORD" -srcalias "$alias" \
+            -destkeystore "$RUNNER_TEMP/keys/upload.jks" -deststoretype JKS -deststorepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -destkeypass "$ANDROID_KEYSTORE_PASSWORD" -destalias upload
+          jq --arg ks "$RUNNER_TEMP/keys/upload.jks" '.android.keystore = $ks | .android.keyAlias = "upload"' mygo.json > mygo.json.tmp
+          mv mygo.json.tmp mygo.json
+      - name: Build
+        env:
+          MYGO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MYGO_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: go tool mygo build -platform android
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.draft-release.outputs.tag }}
+        run: gh release upload "$TAG" build/android/*.apk --clobber --repo "$GITHUB_REPOSITORY"
+
+  # The App Store takes nothing signed by anyone but a paid developer team, so
+  # the .ipa is signed with a certificate of its own, for AltStore, SideStore,
+  # Sideloadly, TrollStore and the like, which sign it again as they install it.
+  ios:
+    needs: draft-release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ needs.draft-release.outputs.tag }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Make a signing identity and a profile for sideloading
+        run: |
+          set -euo pipefail
+          id="$(jq -r .identifier mygo.json)"
+          work="$RUNNER_TEMP/sideload"
+          mkdir -p "$work"
+          cd "$work"
+          cat > cert.cnf <<'EOF'
+          [req]
+          distinguished_name = dn
+          x509_extensions = ext
+          prompt = no
+          [dn]
+          CN = iPhone Distribution: Sideload (SIDELOAD00)
+          OU = SIDELOAD00
+          O = Sideload
+          [ext]
+          basicConstraints = critical,CA:false
+          keyUsage = critical,digitalSignature
+          extendedKeyUsage = critical,codeSigning
+          EOF
+          openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -config cert.cnf -keyout key.pem -out cert.pem
+          openssl pkcs12 -export -legacy -inkey key.pem -in cert.pem -out identity.p12 -passout pass:sideload \
+            || openssl pkcs12 -export -inkey key.pem -in cert.pem -out identity.p12 -passout pass:sideload
+          keychain="$work/sideload.keychain-db"
+          security create-keychain -p sideload "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p sideload "$keychain"
+          security import identity.p12 -k "$keychain" -P sideload -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k sideload "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain
+          security default-keychain -d user -s "$keychain"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain cert.pem
+          security find-identity -v -p codesigning
+          der="$(openssl x509 -in cert.pem -outform DER | base64 | tr -d '\n')"
+          expires="$(date -u -v+10y +%Y-%m-%dT%H:%M:%SZ)"
+          cat > profile.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>Name</key><string>Sideload</string>
+            <key>UUID</key><string>$(uuidgen)</string>
+            <key>TeamIdentifier</key><array><string>SIDELOAD00</string></array>
+            <key>ExpirationDate</key><date>$expires</date>
+            <key>DeveloperCertificates</key><array><data>$der</data></array>
+            <key>Entitlements</key>
+            <dict>
+              <key>application-identifier</key><string>SIDELOAD00.$id</string>
+              <key>com.apple.developer.team-identifier</key><string>SIDELOAD00</string>
+              <key>get-task-allow</key><false/>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+          security cms -S -N "iPhone Distribution: Sideload (SIDELOAD00)" -k "$keychain" -i profile.plist -o sideload.mobileprovision
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp sideload.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/"
+      - name: Build
+        run: |
+          jq '.ios.team = "SIDELOAD00"' mygo.json > mygo.json.tmp && mv mygo.json.tmp mygo.json
+          go tool mygo build -platform ios
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.draft-release.outputs.tag }}
+        run: gh release upload "$TAG" build/ios-arm64/*.ipa --clobber --repo "$GITHUB_REPOSITORY"
+
+  publish:
+    needs: [draft-release, desktop, android, ios]
+    if: ${{ !cancelled() && needs.desktop.result == 'success' && needs.android.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.draft-release.outputs.tag }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
